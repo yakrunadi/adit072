@@ -1333,7 +1333,7 @@ const DEMO_HIST=[
    MAP
 ============================================================ */
 function initMap(){
-    S.map=L.map('map',{center:[-6.895,109.72],zoom:12});
+    S.map=L.map('map',{center:[-6.895,109.72],zoom:19});
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',maxZoom:19}).addTo(S.map);
     S.map.on('click',e=>{
         const la=e.latlng.lat.toFixed(6),lo=e.latlng.lng.toFixed(6);
