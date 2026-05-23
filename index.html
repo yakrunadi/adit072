@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🛵 GoJek Radar - Pekalongan & Batang</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f0f1a; color: #fff; overflow: hidden; }
+
+        /* ===== HEADER ===== */
+        .header {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #00d4ff;
+            box-shadow: 0 2px 20px rgba(0,212,255,0.3);
+            position: relative;
+            z-index: 1000;
+            height: 60px;
+        }
+        .header h1 { font-size: 1.3em; color: #00d4ff; line-height: 1.2; }
+        .header .subtitle { font-size: 0.7em; color: #aaa; }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .status-badge {
+            background: #00ff88; color: #000;
+            padding: 4px 12px; border-radius: 20px;
+            font-size: 0.72em; font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+        .clock-display {
+            font-size: 1.1em; font-weight: bold; color: #00d4ff;
+            font-family: monospace; letter-spacing: 1px;
+        }
+
+        /* ===== LAYOUT ===== */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 310px 1fr;
+            height: calc(100vh - 60px);
+        }
+
+        /* ===== SIDEBAR ===== */
+        .sidebar {
+            background: #1a1a2e;
+            overflow-y: auto;
+            border-right: 1px solid #2a2a3e;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar::-webkit-scrollbar { width: 3px; }
+        .sidebar::-webkit-scrollbar-thumb { background: #00d4ff44; border-radius: 2px; }
+        .sidebar::-webkit-scrollbar-thumb:hover { background: #00d4ff; }
+
+        /* ===== PANEL ===== */
+        .panel {
+            border-bottom: 1px solid #2a2a3e;
+            padding: 13px 15px;
+        }
+        .panel-title {
+            font-size: 0.8em; color: #00d4ff; font-weight: bold;
+            margin-bottom: 10px; display: flex; align-items: center;
+            justify-content: space-between; gap: 6px;
+        }
+        .panel-title span { color: #aaa; font-weight: normal; font-size: 0.9em; }
+
+        /* ===== BUTTONS ===== */
+        .btn { border: none; cursor: pointer; border-radius: 6px; font-weight: bold; transition: all 0.2s; }
+        .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .btn-xs  { padding: 4px 10px; font-size: 0.68em; }
+        .btn-sm  { padding: 7px 10px; font-size: 0.73em; }
+        .btn-md  { padding: 9px 14px; font-size: 0.8em; }
+        .btn-block { width: 100%; display: block; text-align: center; }
+        .btn-primary  { background: #00d4ff; color: #000; }
+        .btn-success  { background: #00ff88; color: #000; }
+        .btn-warning  { background: #ff6b35; color: #fff; }
+        .btn-danger   { background: #ff3366; color: #fff; }
+        .btn-secondary{ background: #2e2e4e; color: #ccc; border: 1px solid #444; }
+        .btn-purple   { background: #7c4dff; color: #fff; }
+
+        /* ===== JAM GRID ===== */
+        .hour-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 3px;
+            margin-bottom: 8px;
+        }
+        .hour-btn {
+            background: #252540; border: 1px solid #3a3a5e;
+            color: #888; padding: 5px 2px; border-radius: 5px;
+            font-size: 0.68em; cursor: pointer; text-align: center;
+            transition: all 0.15s; position: relative;
+        }
+        .hour-btn:hover { border-color: #00d4ff; color: #00d4ff; background: #1e1e38; }
+        .hour-btn.active { background: #00d4ff; color: #000; border-color: #00d4ff; font-weight: bold; }
+        .hour-btn.has-data::after {
+            content: ''; position: absolute; bottom: 2px; left: 50%;
+            transform: translateX(-50%); width: 3px; height: 3px;
+            background: #00ff88; border-radius: 50%;
+        }
+        .hour-btn.active.has-data::after { background: #000; }
+
+        /* ===== SLIDER ===== */
+        .slider-wrap { margin: 8px 0; }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 0.65em; color: #666; margin-bottom: 3px; }
+        input[type="range"] { width: 100%; accent-color: #00d4ff; height: 4px; }
+        .slider-val {
+            text-align: center; font-size: 1.6em; color: #00d4ff;
+            font-weight: bold; font-family: monospace; margin: 4px 0;
+        }
+        .filter-row { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+        .filter-row .btn { flex: 1; min-width: 60px; }
+
+        /* ===== STATS GRID ===== */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .stat-card {
+            background: #252540; padding: 8px 10px;
+            border-radius: 8px; text-align: center;
+            border: 1px solid #2a2a3e; cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .stat-card:hover { border-color: #00d4ff44; }
+        .stat-val { font-size: 1.25em; font-weight: bold; color: #00d4ff; line-height: 1.2; }
+        .stat-lbl { font-size: 0.6em; color: #888; margin-top: 2px; }
+
+        /* ===== TOP LIST ===== */
+        .top-list { list-style: none; }
+        .top-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 8px; margin-bottom: 3px;
+            background: #252540; border-radius: 6px; font-size: 0.73em;
+            border-left: 3px solid transparent; cursor: pointer; transition: all 0.15s;
+        }
+        .top-item:hover { background: #2e2e4e; border-left-color: #00d4ff; }
+        .top-item:nth-child(1) { border-left-color: #ffd600; }
+        .top-item:nth-child(2) { border-left-color: #c0c0c0; }
+        .top-item:nth-child(3) { border-left-color: #cd7f32; }
+        .top-rank { color: #ff6b35; font-weight: bold; margin-right: 5px; min-width: 20px; }
+        .top-name { flex: 1; color: #ddd; }
+        .top-sub  { color: #666; font-size: 0.85em; }
+        .count-badge {
+            background: #00d4ff; color: #000;
+            padding: 2px 8px; border-radius: 10px;
+            font-size: 0.8em; font-weight: bold; flex-shrink: 0;
+        }
+
+        /* ===== FORM ===== */
+        .form-group { margin-bottom: 8px; }
+        .form-group label { font-size: 0.7em; color: #888; display: block; margin-bottom: 3px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; background: #1e1e32; border: 1px solid #3a3a5e;
+            color: #ddd; padding: 6px 10px; border-radius: 6px; font-size: 0.78em;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none; border-color: #00d4ff; background: #22223a;
+        }
+        .form-group select option { background: #1e1e32; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
+
+        /* ===== HISTORY ITEMS ===== */
+        .history-scroll { max-height: 190px; overflow-y: auto; }
+        .history-scroll::-webkit-scrollbar { width: 3px; }
+        .history-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+        .h-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 7px; margin-bottom: 3px;
+            background: #1e1e32; border-radius: 5px;
+            border-left: 3px solid #333; transition: border-color 0.15s;
+            cursor: pointer;
+        }
+        .h-item:hover { border-left-color: #00d4ff; background: #22223a; }
+        .h-item.ride  { border-left-color: #1565c0; }
+        .h-item.food  { border-left-color: #e65100; }
+        .h-item.send  { border-left-color: #1b5e20; }
+        .h-item.shop  { border-left-color: #4a148c; }
+        .h-info { flex: 1; min-width: 0; }
+        .h-loc  { color: #00d4ff; font-size: 0.72em; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .h-meta { color: #666; font-size: 0.65em; margin-top: 1px; }
+        .h-inc  { color: #00ff88; font-weight: bold; font-size: 0.7em; flex-shrink: 0; }
+        .h-del  { background: #ff336644; border: 1px solid #ff3366; color: #ff3366; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.65em; flex-shrink: 0; transition: all 0.15s; }
+        .h-del:hover { background: #ff3366; color: #fff; }
+
+        /* ===== MAP ===== */
+        #map { width: 100%; height: 100%; }
+        .map-wrap { position: relative; overflow: hidden; }
+
+        /* ===== MAP LEGEND ===== */
+        .map-legend {
+            position: absolute; bottom: 30px; right: 10px;
+            background: rgba(10,10,20,0.92); border: 1px solid #2a2a3e;
+            border-radius: 10px; padding: 12px 14px; z-index: 900;
+            font-size: 0.72em; backdrop-filter: blur(4px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .legend-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; font-size: 0.95em; }
+        .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: #aaa; }
+        .legend-dot { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; opacity: 0.85; }
+        .legend-hint { color: #555; font-size: 0.85em; margin-top: 8px; border-top: 1px solid #2a2a3e; padding-top: 6px; }
+
+        /* ===== MAP INFO BOX ===== */
+        .map-info-box {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(10,10,20,0.88); border: 1px solid #00d4ff33;
+            border-radius: 8px; padding: 8px 12px; z-index: 900;
+            font-size: 0.72em; backdrop-filter: blur(4px);
+        }
+        .map-info-box .mib-title { color: #00d4ff; font-weight: bold; margin-bottom: 4px; }
+        .map-info-box .mib-val   { color: #fff; }
+        .map-info-box .mib-sub   { color: #666; font-size: 0.88em; }
+
+        /* ===== TOAST ===== */
+        .toast {
+            position: fixed; top: 70px; right: 15px;
+            padding: 11px 18px; border-radius: 8px;
+            font-weight: bold; z-index: 9999;
+            transform: translateX(120%); transition: transform 0.3s ease;
+            font-size: 0.82em; max-width: 280px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: #00ff88; color: #000; }
+        .toast.error   { background: #ff3366; color: #fff; }
+        .toast.info    { background: #1e1e38; color: #ddd; border: 1px solid #444; }
+        .toast.warning { background: #ff6b35; color: #fff; }
+
+        /* ===== MODAL KONFIRMASI ===== */
+        .modal-bg {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.75); z-index: 9500;
+            justify-content: center; align-items: center;
+        }
+        .modal-bg.show { display: flex; }
+        .modal-box {
+            background: #1a1a2e; border: 2px solid #ff3366;
+            border-radius: 14px; padding: 26px; max-width: 370px;
+            width: 92%; text-align: center;
+            box-shadow: 0 0 40px rgba(255,51,102,0.3);
+        }
+        .modal-box .m-icon { font-size: 2.5em; margin-bottom: 10px; }
+        .modal-box h3 { color: #ff3366; margin-bottom: 10px; }
+        .modal-box p  { color: #aaa; font-size: 0.83em; margin-bottom: 20px; line-height: 1.5; }
+        .modal-btns { display: flex; gap: 10px; justify-content: center; }
+        .modal-btns button { padding: 10px 26px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 0.9em; }
+
+        /* ===== BUBBLE DETAIL POPUP ===== */
+        .bp-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.65); z-index: 8000;
+            justify-content: center; align-items: center;
+            padding: 16px; backdrop-filter: blur(3px);
+        }
+        .bp-overlay.show { display: flex; }
+        .bp-modal {
+            background: #13132a; border: 1px solid #00d4ff44;
+            border-radius: 16px; width: 100%; max-width: 680px;
+            max-height: 90vh; display: flex; flex-direction: column;
+            box-shadow: 0 0 50px rgba(0,212,255,0.2);
+            overflow: hidden;
+        }
+
+        /* BP HEADER */
+        .bp-head {
+            background: linear-gradient(135deg, #0f3460, #16213e);
+            padding: 14px 18px; display: flex; align-items: flex-start;
+            justify-content: space-between; flex-shrink: 0;
+            border-bottom: 1px solid #00d4ff22;
+        }
+        .bp-head-left h3 { color: #00d4ff; font-size: 1em; margin-bottom: 2px; }
+        .bp-head-left .bp-coord { color: #555; font-size: 0.65em; font-family: monospace; }
+        .bp-head-left .bp-area  { color: #888; font-size: 0.72em; }
+        .bp-status-pill {
+            padding: 3px 10px; border-radius: 12px; font-size: 0.68em;
+            font-weight: bold; margin-left: 8px; vertical-align: middle;
+        }
+        .bp-close-btn {
+            background: #ff336622; border: 1px solid #ff336666; color: #ff3366;
+            width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+            font-size: 1.1em; display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; transition: all 0.15s; margin-left: 10px;
+        }
+        .bp-close-btn:hover { background: #ff3366; color: #fff; }
+
+        /* BP STATS */
+        .bp-stats {
+            display: grid; grid-template-columns: repeat(4,1fr);
+            gap: 8px; padding: 12px 16px;
+            border-bottom: 1px solid #1e1e38; flex-shrink: 0;
+        }
+        .bp-stat-card {
+            background: #1e1e35; border-radius: 8px; padding: 9px 6px;
+            text-align: center; border: 1px solid #2a2a45;
+        }
+        .bp-stat-val { font-size: 1.15em; font-weight: bold; color: #00d4ff; }
+        .bp-stat-lbl { font-size: 0.58em; color: #666; margin-top: 3px; }
+
+        /* BP CHART */
+        .bp-chart-wrap {
+            padding: 10px 16px 8px; border-bottom: 1px solid #1e1e38;
+            flex-shrink: 0;
+        }
+        .bp-chart-title { font-size: 0.72em; color: #ff6b35; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; }
+        .hour-bars {
+            display: flex; align-items: flex-end;
+            gap: 2px; height: 65px;
+        }
+        .hb-wrap {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; height: 100%; cursor: pointer;
+            position: relative; border-radius: 2px;
+            transition: opacity 0.15s;
+        }
+        .hb-wrap:hover { opacity: 1 !important; }
+        .hb-bar {
+            width: 100%; border-radius: 2px 2px 0 0;
+            transition: all 0.2s; min-height: 2px;
+        }
+        .hb-lbl { font-size: 0.4em; color: #555; margin-top: 2px; line-height: 1; }
+        .hb-tip {
+            position: absolute; bottom: calc(100% + 4px); left: 50%;
+            transform: translateX(-50%);
+            background: #2a2a45; color: #fff; padding: 3px 7px;
+            border-radius: 5px; font-size: 0.62em; white-space: nowrap;
+            display: none; z-index: 10; pointer-events: none;
+            border: 1px solid #3a3a5e;
+        }
+        .hb-wrap:hover .hb-tip { display: block; }
+        .hb-wrap.selected { opacity: 1 !important; outline: 1px solid #00d4ff; border-radius: 2px; }
+        .hb-wrap.dimmed { opacity: 0.3; }
+
+        /* BP TABLE SECTION */
+        .bp-table-area {
+            flex: 1; overflow: hidden; display: flex;
+            flex-direction: column; min-height: 0;
+        }
+        .bp-toolbar {
+            padding: 8px 16px; display: flex; gap: 6px;
+            border-bottom: 1px solid #1e1e38; flex-shrink: 0; flex-wrap: wrap;
+        }
+        .bp-toolbar select, .bp-toolbar input {
+            background: #1e1e32; border: 1px solid #3a3a5e;
+            color: #ccc; padding: 5px 8px; border-radius: 6px; font-size: 0.72em;
+        }
+        .bp-toolbar select:focus, .bp-toolbar input:focus { outline: none; border-color: #00d4ff; }
+        .bp-toolbar .tb-search { flex: 1; min-width: 100px; }
+        .bp-result-info {
+            padding: 5px 16px; font-size: 0.68em; color: #555;
+            border-bottom: 1px solid #1e1e38; flex-shrink: 0;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .bp-result-info .total-inc { color: #00ff88; font-weight: bold; }
+        .bp-table-scroll {
+            flex: 1; overflow-y: auto; min-height: 0;
+        }
+        .bp-table-scroll::-webkit-scrollbar { width: 4px; }
+        .bp-table-scroll::-webkit-scrollbar-thumb { background: #2a2a45; border-radius: 2px; }
+        .bp-table-scroll::-webkit-scrollbar-thumb:hover { background: #00d4ff44; }
+
+        table.bp-tbl {
+            width: 100%; border-collapse: collapse; font-size: 0.75em;
+        }
+        table.bp-tbl th {
+            background: #1a1a2e; padding: 7px 10px; text-align: left;
+            color: #00d4ff; position: sticky; top: 0; z-index: 5;
+            cursor: pointer; white-space: nowrap; font-size: 0.85em;
+            border-bottom: 1px solid #2a2a45; user-select: none;
+        }
+        table.bp-tbl th:hover { background: #1e1e38; }
+        table.bp-tbl td {
+            padding: 7px 10px; border-bottom: 1px solid #1a1a2a;
+            color: #bbb; vertical-align: middle;
+        }
+        table.bp-tbl tr:hover td { background: #1a1a30; }
+        table.bp-tbl tr:last-child td { border-bottom: none; }
+
+        /* TYPE BADGES */
+        .tbadge {
+            display: inline-flex; align-items: center; gap: 3px;
+            padding: 2px 8px; border-radius: 10px;
+            font-size: 0.82em; font-weight: bold; white-space: nowrap;
+        }
+        .tbadge.ride { background: #1565c022; color: #42a5f5; border: 1px solid #1565c044; }
+        .tbadge.food { background: #e6510022; color: #ffa726; border: 1px solid #e6510044; }
+        .tbadge.send { background: #1b5e2022; color: #66bb6a; border: 1px solid #1b5e2044; }
+        .tbadge.shop { background: #4a148c22; color: #ce93d8; border: 1px solid #4a148c44; }
+
+        .time-cell  { color: #ffd600; font-weight: bold; font-family: monospace; font-size: 0.92em; }
+        .date-cell  { color: #888; font-size: 0.88em; }
+        .inc-cell   { color: #00ff88; font-weight: bold; }
+        .note-cell  { color: #666; font-size: 0.9em; max-width: 130px; }
+        .row-del    {
+            background: transparent; border: 1px solid #ff336644; color: #ff3366;
+            padding: 3px 7px; border-radius: 4px; cursor: pointer;
+            font-size: 0.75em; transition: all 0.15s;
+        }
+        .row-del:hover { background: #ff3366; color: #fff; }
+
+        .no-data {
+            padding: 40px 20px; text-align: center; color: #444;
+        }
+        .no-data .nd-icon { font-size: 2.5em; margin-bottom: 8px; }
+        .no-data p { font-size: 0.82em; }
+
+        .sort-arrow { font-size: 0.75em; margin-left: 3px; color: #00d4ff; }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .main-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+            .sidebar { max-height: 42vh; }
+            .bp-stats { grid-template-columns: repeat(2,1fr); }
+            .bp-modal { max-height: 95vh; }
+        }
+
+        /* ===== ANIMASI BUBBLE ===== */
+        @keyframes bubblePulse {
+            0%   { transform: scale(1); opacity: 0.8; }
+            50%  { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+
+        /* ===== KOORDINAT CLICK INFO ===== */
+        .coord-tip {
+            position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,212,255,0.15); border: 1px solid #00d4ff44;
+            color: #00d4ff; padding: 6px 14px; border-radius: 20px;
+            font-size: 0.72em; z-index: 900; pointer-events: none;
+            opacity: 0; transition: opacity 0.3s; font-family: monospace;
+        }
+        .coord-tip.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<div class="header">
+    <div>
+        <h1>🛵 GoJek Radar
+            <span style="color:#ff6b35;font-size:0.85em">Pekalongan & Batang</span>
+        </h1>
+        <div class="subtitle">Smart Heatmap · Klik bubble untuk historis lengkap</div>
+    </div>
+    <div class="header-right">
+        <div class="clock-display" id="clockDisplay">00:00:00</div>
+        <div class="status-badge">● LIVE</div>
+    </div>
+</div>
+
+<!-- ===== MAIN LAYOUT ===== -->
+<div class="main-layout">
+
+    <!-- ===== SIDEBAR ===== -->
+    <div class="sidebar">
+
+        <!-- FILTER JAM -->
+        <div class="panel">
+            <div class="panel-title">
+                🕐 Filter Jam
+                <span id="activeFilterLabel">Semua Jam</span>
+            </div>
+
+            <!-- Slider -->
+            <div class="slider-wrap">
+                <div class="slider-labels"><span>00:00</span><span>Geser → pilih jam</span><span>23:00</span></div>
+                <input type="range" id="hourSlider" min="0" max="23" value="6" oninput="onSliderChange(this.value)">
+                <div class="slider-val" id="sliderVal">06:00</div>
+            </div>
+            <div class="filter-row">
+                <button class="btn btn-sm btn-primary" onclick="applySlider()">➕ Tambah Jam</button>
+                <button class="btn btn-sm btn-secondary" onclick="clearFilter()">🔄 Reset</button>
+                <button class="btn btn-sm btn-primary" onclick="applyFilter()">✅ Apply</button>
+            </div>
+
+            <!-- Grid jam -->
+            <div style="margin: 10px 0 6px; font-size:0.7em; color:#666;">
+                Pilih langsung (● = ada data):
+            </div>
+            <div class="hour-grid" id="hourGrid"></div>
+
+            <div class="filter-row">
+                <button class="btn btn-xs btn-warning" onclick="selectPeak()">🔥 Jam Puncak</button>
+                <button class="btn btn-xs btn-secondary" onclick="selectAll()">⭐ Semua</button>
+                <button class="btn btn-xs btn-purple" onclick="selectNow()">📍 Jam Ini</button>
+            </div>
+        </div>
+
+        <!-- STATISTIK -->
+        <div class="panel">
+            <div class="panel-title">📊 Statistik Wilayah</div>
+            <div class="stats-grid">
+                <div class="stat-card" onclick="openStatsDetail()">
+                    <div class="stat-val" id="sTotal">0</div>
+                    <div class="stat-lbl">Total Order</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val" id="sIncome">0</div>
+                    <div class="stat-lbl">Omset (rb)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val" id="sHotspot" style="font-size:0.85em">-</div>
+                    <div class="stat-lbl">🔥 Hotspot</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val" id="sPeak">-</div>
+                    <div class="stat-lbl">⏰ Jam Puncak</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOP 5 -->
+        <div class="panel">
+            <div class="panel-title">🏆 Top Lokasi Ramai</div>
+            <ul class="top-list" id="topList"></ul>
+        </div>
+
+        <!-- INPUT HISTORIS -->
+        <div class="panel">
+            <div class="panel-title">➕ Input Historis Order</div>
+
+            <div class="form-group">
+                <label>📍 Lokasi</label>
+                <select id="fLoc" onchange="onLocChange()"></select>
+            </div>
+
+            <!-- Form lokasi baru -->
+            <div id="newLocForm" style="display:none; background:#1e1e32; border-radius:8px; padding:10px; margin-bottom:8px; border:1px solid #3a3a5e;">
+                <div style="font-size:0.7em; color:#ff6b35; margin-bottom:8px; font-weight:bold;">📌 Lokasi Baru — Klik peta untuk koordinat</div>
+                <div class="form-group">
+                    <label>Nama Lokasi</label>
+                    <input type="text" id="fNewName" placeholder="cth: Warung Bakso Pak Mun">
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Latitude</label>
+                        <input type="number" id="fNewLat" placeholder="-6.8900" step="0.000001">
+                    </div>
+                    <div class="form-group">
+                        <label>Longitude</label>
+                        <input type="number" id="fNewLng" placeholder="109.6900" step="0.000001">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Area / Kecamatan</label>
+                    <input type="text" id="fNewArea" placeholder="cth: Pekalongan Barat">
+                </div>
+            </div>
+
+            <!-- Jam, Menit, Omset -->
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>🕐 Jam (0-23)</label>
+                    <input type="number" id="fHour" min="0" max="23" placeholder="7">
+                </div>
+                <div class="form-group">
+                    <label>⏱ Menit (0-59)</label>
+                    <input type="number" id="fMinute" min="0" max="59" placeholder="30">
+                </div>
+                <div class="form-group">
+                    <label>💰 Omset (rb)</label>
+                    <input type="number" id="fIncome" placeholder="15" min="0">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>📦 Jenis Order</label>
+                    <select id="fType">
+                        <option value="ride">🛵 GoRide</option>
+                        <option value="food">🍱 GoFood</option>
+                        <option value="send">📦 GoSend</option>
+                        <option value="shop">🛍️ GoShop</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>📅 Tanggal</label>
+                    <input type="date" id="fDate">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>📝 Catatan (opsional)</label>
+                <textarea id="fNote" rows="2" style="resize:none" placeholder="kondisi cuaca, situasi ramai/sepi, dll..."></textarea>
+            </div>
+
+            <button class="btn btn-md btn-success btn-block" onclick="addHistory()">
+                💾 Simpan Historis
+            </button>
+        </div>
+
+        <!-- RIWAYAT -->
+        <div class="panel">
+            <div class="panel-title">
+                📋 Riwayat Order
+                <span style="color:#555; font-size:0.85em">20 terakhir</span>
+            </div>
+            <div class="history-scroll" id="historyList"></div>
+            <div class="filter-row" style="margin-top:10px;">
+                <button class="btn btn-sm btn-warning" onclick="exportData()">📤 Export JSON</button>
+                <button class="btn btn-sm btn-danger"  onclick="showConfirm('cache')">🗑️ Hapus Cache</button>
+            </div>
+            <button class="btn btn-sm btn-danger btn-block" style="margin-top:5px" onclick="showConfirm('all')">
+                ⚠️ Hapus SEMUA Data
+            </button>
+        </div>
+
+    </div><!-- /sidebar -->
+
+    <!-- ===== MAP AREA ===== -->
+    <div class="map-wrap">
+        <div id="map"></div>
+
+        <!-- Info box atas kiri -->
+        <div class="map-info-box" id="mapInfoBox">
+            <div class="mib-title">🗺️ Pekalongan & Batang</div>
+            <div class="mib-val" id="mibFilter">Menampilkan: Semua Jam</div>
+            <div class="mib-sub" id="mibCount">0 order terpetakan</div>
+        </div>
+
+        <!-- Legend -->
+        <div class="map-legend">
+            <div class="legend-title">🫧 Bubble Heatmap</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#ff1744"></div> Sangat Ramai (&gt;10)</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#ff6d00"></div> Ramai (6–10)</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#ffd600"></div> Sedang (3–5)</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#00e676"></div> Sepi (1–2)</div>
+            <div class="legend-row"><div class="legend-dot" style="background:#2979ff; opacity:0.6"></div> Belum Ada Data</div>
+            <div class="legend-hint">💡 Klik bubble → lihat historis<br>💡 Klik peta → ambil koordinat</div>
+        </div>
+
+        <!-- Koordinat info -->
+        <div class="coord-tip" id="coordTip"></div>
+    </div>
+
+</div><!-- /main-layout -->
+
+<!-- ===== BUBBLE DETAIL POPUP ===== -->
+<div class="bp-overlay" id="bpOverlay">
+    <div class="bp-modal">
+
+        <!-- Header -->
+        <div class="bp-head">
+            <div class="bp-head-left">
+                <h3 id="bpName">📍 Nama Lokasi</h3>
+                <div class="bp-area" id="bpArea">Area</div>
+                <div class="bp-coord" id="bpCoord">lat, lng</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                <span class="bp-status-pill" id="bpStatusPill">●</span>
+                <button class="bp-close-btn" onclick="closeBp()">✕</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="bp-stats">
+            <div class="bp-stat-card">
+                <div class="bp-stat-val" id="bpTotal">0</div>
+                <div class="bp-stat-lbl">Total Order</div>
+            </div>
+            <div class="bp-stat-card">
+                <div class="bp-stat-val" id="bpIncome">0</div>
+                <div class="bp-stat-lbl">Total Omset (rb)</div>
+            </div>
+            <div class="bp-stat-card">
+                <div class="bp-stat-val" id="bpAvg">0</div>
+                <div class="bp-stat-lbl">Rata-rata (rb)</div>
+            </div>
+            <div class="bp-stat-card">
+                <div class="bp-stat-val" id="bpPeak">-</div>
+                <div class="bp-stat-lbl">Jam Puncak</div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="bp-chart-wrap">
+            <div class="bp-chart-title">
+                <span>📊 Sebaran Order per Jam (klik bar = filter)</span>
+                <button class="btn btn-xs btn-secondary" onclick="resetBpHourFilter()">Reset jam</button>
+            </div>
+            <div class="hour-bars" id="bpBars"></div>
+        </div>
+
+        <!-- Tabel -->
+        <div class="bp-table-area">
+            <!-- Toolbar filter -->
+            <div class="bp-toolbar">
+                <select id="bpFType" onchange="renderBpRows()">
+                    <option value="">Semua Tipe</option>
+                    <option value="ride">🛵 GoRide</option>
+                    <option value="food">🍱 GoFood</option>
+                    <option value="send">📦 GoSend</option>
+                    <option value="shop">🛍️ GoShop</option>
+                </select>
+                <select id="bpFHour" onchange="onBpHourSelect()">
+                    <option value="">Semua Jam</option>
+                </select>
+                <input type="text" class="tb-search" id="bpSearch" placeholder="🔍 Cari catatan..." oninput="renderBpRows()">
+            </div>
+
+            <!-- Result info -->
+            <div class="bp-result-info">
+                <span id="bpRowInfo">0 data</span>
+                <span class="total-inc" id="bpTotalInc">Omset: Rp 0rb</span>
+            </div>
+
+            <!-- Tabel scroll -->
+            <div class="bp-table-scroll">
+                <table class="bp-tbl">
+                    <thead>
+                        <tr>
+                            <th onclick="bpSort('date')">📅 Tanggal <span class="sort-arrow" id="sa_date"></span></th>
+                            <th onclick="bpSort('time')">🕐 Jam <span class="sort-arrow" id="sa_time"></span></th>
+                            <th onclick="bpSort('type')">📦 Tipe <span class="sort-arrow" id="sa_type"></span></th>
+                            <th onclick="bpSort('income')">💰 Omset <span class="sort-arrow" id="sa_income"></span></th>
+                            <th>📝 Catatan</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="bpTbody"></tbody>
+                </table>
+                <div class="no-data" id="bpNoData" style="display:none">
+                    <div class="nd-icon">📭</div>
+                    <p>Tidak ada data historis<br>untuk filter ini</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ===== MODAL KONFIRMASI ===== -->
+<div class="modal-bg" id="confirmBg">
+    <div class="modal-box">
+        <div class="m-icon" id="mIcon">⚠️</div>
+        <h3 id="mTitle">Konfirmasi</h3>
+        <p id="mText"></p>
+        <div class="modal-btns">
+            <button style="background:#2e2e4e;color:#ccc" onclick="closeConfirm()">Batal</button>
+            <button style="background:#ff3366;color:#fff" id="mConfirmBtn" onclick="doDelete()">Hapus</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<!-- ===== SCRIPT ===== -->
+<script>
+'use strict';
+
+// ============================================================
+// KONSTANTA & DATA DEFAULT
+// ============================================================
+const LOCATIONS_DEFAULT = [
+    // PEKALONGAN KOTA
+    {id:'pkl_alun',       name:'Alun-alun Pekalongan',      lat:-6.8886, lng:109.6753, area:'Pekalongan Kota'},
+    {id:'pkl_stasiun',    name:'Stasiun Pekalongan',         lat:-6.8878, lng:109.6697, area:'Pekalongan Kota'},
+    {id:'pkl_mall',       name:'Mall/Giant Pekalongan',      lat:-6.8840, lng:109.6780, area:'Pekalongan Kota'},
+    {id:'pkl_rsbhay',     name:'RS Bhayangkara PKL',         lat:-6.8920, lng:109.6820, area:'Pekalongan Kota'},
+    {id:'pkl_setono',     name:'Pasar Grosir Setono Betek',  lat:-6.8970, lng:109.6600, area:'Pekalongan Kota'},
+    {id:'pkl_terminal',   name:'Terminal Pekalongan',         lat:-6.9050, lng:109.6580, area:'Pekalongan Kota'},
+    {id:'pkl_unikal',     name:'Universitas Pekalongan',      lat:-6.8780, lng:109.6850, area:'Pekalongan Kota'},
+    {id:'pkl_banjarsari', name:'Pasar Banjarsari',            lat:-6.8810, lng:109.6750, area:'Pekalongan Kota'},
+    {id:'pkl_sriratu',    name:'Swalayan Sriratu',            lat:-6.8860, lng:109.6760, area:'Pekalongan Kota'},
+    {id:'pkl_batik',      name:'Kawasan Batik Pecenongan',    lat:-6.9030, lng:109.6620, area:'Pekalongan Kota'},
+    {id:'pkl_pesisir',    name:'Kawasan Pesisir PKL',         lat:-6.8680, lng:109.6720, area:'Pekalongan Kota'},
+    {id:'pkl_rsud',       name:'RSUD Bendan Pekalongan',      lat:-6.8900, lng:109.6900, area:'Pekalongan Kota'},
+    {id:'pkl_simpang',    name:'Simpang Lima Pekalongan',     lat:-6.8870, lng:109.6770, area:'Pekalongan Kota'},
+    // KAB PEKALONGAN
+    {id:'kpkl_wiradesa',  name:'Wiradesa',                    lat:-6.8760, lng:109.7200, area:'Kab. Pekalongan'},
+    {id:'kpkl_kajen',     name:'Kajen (Ibukota Kab.)',        lat:-7.0030, lng:109.6560, area:'Kab. Pekalongan'},
+    {id:'kpkl_kdwuni',    name:'Kedungwuni',                  lat:-6.9730, lng:109.6730, area:'Kab. Pekalongan'},
+    {id:'kpkl_sragi',     name:'Sragi',                       lat:-6.9200, lng:109.7600, area:'Kab. Pekalongan'},
+    // BATANG
+    {id:'btg_alun',       name:'Alun-alun Batang',            lat:-6.9025, lng:109.7322, area:'Batang'},
+    {id:'btg_stasiun',    name:'Stasiun Batang',              lat:-6.9010, lng:109.7280, area:'Batang'},
+    {id:'btg_pasar',      name:'Pasar Batang',                lat:-6.9040, lng:109.7340, area:'Batang'},
+    {id:'btg_rsud',       name:'RSUD Batang',                 lat:-6.9060, lng:109.7360, area:'Batang'},
+    {id:'btg_terminal',   name:'Terminal Batang',              lat:-6.9080, lng:109.7200, area:'Batang'},
+    {id:'btg_polres',     name:'Polres Batang',               lat:-6.9030, lng:109.7400, area:'Batang'},
+    {id:'btg_weleri',     name:'Weleri',                      lat:-6.9400, lng:109.8100, area:'Batang'},
+    {id:'btg_gringsing',  name:'Gringsing',                   lat:-6.9800, lng:109.8600, area:'Batang'},
+    {id:'btg_bandar',     name:'Bandar',                      lat:-7.0800, lng:109.7300, area:'Batang'},
+    {id:'btg_subah',      name:'Subah',                       lat:-6.9600, lng:109.7700, area:'Batang'},
+    // PANTURA
+    {id:'pantura_e',      name:'Rest Area Pantura PKL Timur', lat:-6.8900, lng:109.7100, area:'Pantura'},
+    {id:'pantura_b',      name:'Rest Area Pantura Batang',    lat:-6.8980, lng:109.7600, area:'Pantura'},
+];
+
+const DEMO_HISTORY = [
+    {id:1,  locId:'pkl_alun',      hour:7,  minute:15, income:12, type:'ride', date:'2024-01-15', note:'Pagi ramai orang ke kantor'},
+    {id:2,  locId:'pkl_alun',      hour:7,  minute:45, income:15, type:'food', date:'2024-01-16', note:'Sarapan ramai'},
+    {id:3,  locId:'pkl_alun',      hour:8,  minute:10, income:10, type:'ride', date:'2024-01-17', note:''},
+    {id:4,  locId:'pkl_alun',      hour:12, minute:0,  income:20, type:'food', date:'2024-01-15', note:'Jam makan siang, ramai banget'},
+    {id:5,  locId:'pkl_alun',      hour:12, minute:30, income:18, type:'food', date:'2024-01-16', note:''},
+    {id:6,  locId:'pkl_alun',      hour:12, minute:5,  income:22, type:'food', date:'2024-01-17', note:'Order nasi padang'},
+    {id:7,  locId:'pkl_alun',      hour:17, minute:20, income:18, type:'ride', date:'2024-01-15', note:'Pulang kantor'},
+    {id:8,  locId:'pkl_alun',      hour:17, minute:50, income:22, type:'ride', date:'2024-01-16', note:''},
+    {id:9,  locId:'pkl_alun',      hour:19, minute:0,  income:25, type:'food', date:'2024-01-17', note:'Malam ramai nongkrong'},
+    {id:10, locId:'pkl_alun',      hour:20, minute:30, income:30, type:'food', date:'2024-01-18', note:'Weekend malam'},
+    {id:11, locId:'pkl_alun',      hour:21, minute:0,  income:28, type:'food', date:'2024-01-19', note:''},
+    {id:12, locId:'pkl_stasiun',   hour:5,  minute:30, income:20, type:'ride', date:'2024-01-15', note:'Kereta subuh'},
+    {id:13, locId:'pkl_stasiun',   hour:5,  minute:55, income:22, type:'ride', date:'2024-01-16', note:''},
+    {id:14, locId:'pkl_stasiun',   hour:6,  minute:0,  income:25, type:'ride', date:'2024-01-15', note:'Kereta pertama'},
+    {id:15, locId:'pkl_stasiun',   hour:6,  minute:20, income:18, type:'ride', date:'2024-01-16', note:''},
+    {id:16, locId:'pkl_stasiun',   hour:17, minute:10, income:30, type:'ride', date:'2024-01-15', note:'Kereta sore tiba'},
+    {id:17, locId:'pkl_stasiun',   hour:17, minute:45, income:28, type:'ride', date:'2024-01-16', note:''},
+    {id:18, locId:'pkl_stasiun',   hour:18, minute:5,  income:35, type:'ride', date:'2024-01-17', note:'Kereta malam awal'},
+    {id:19, locId:'pkl_stasiun',   hour:20, minute:0,  income:32, type:'ride', date:'2024-01-18', note:''},
+    {id:20, locId:'pkl_mall',      hour:10, minute:30, income:15, type:'food', date:'2024-01-15', note:''},
+    {id:21, locId:'pkl_mall',      hour:13, minute:0,  income:25, type:'food', date:'2024-01-15', note:'Weekend ramai'},
+    {id:22, locId:'pkl_mall',      hour:15, minute:20, income:20, type:'food', date:'2024-01-16', note:''},
+    {id:23, locId:'pkl_mall',      hour:19, minute:0,  income:35, type:'food', date:'2024-01-17', note:'Malam minggu peak'},
+    {id:24, locId:'pkl_mall',      hour:19, minute:30, income:40, type:'food', date:'2024-01-18', note:''},
+    {id:25, locId:'pkl_mall',      hour:20, minute:15, income:38, type:'food', date:'2024-01-19', note:''},
+    {id:26, locId:'pkl_unikal',    hour:7,  minute:0,  income:10, type:'ride', date:'2024-01-15', note:'Mahasiswa masuk'},
+    {id:27, locId:'pkl_unikal',    hour:7,  minute:30, income:9,  type:'ride', date:'2024-01-16', note:''},
+    {id:28, locId:'pkl_unikal',    hour:12, minute:15, income:8,  type:'food', date:'2024-01-15', note:'Makan siang mahasiswa'},
+    {id:29, locId:'pkl_unikal',    hour:16, minute:0,  income:12, type:'ride', date:'2024-01-15', note:'Kuliah selesai'},
+    {id:30, locId:'pkl_unikal',    hour:16, minute:30, income:11, type:'ride', date:'2024-01-16', note:''},
+    {id:31, locId:'btg_alun',      hour:8,  minute:0,  income:9,  type:'ride', date:'2024-01-15', note:''},
+    {id:32, locId:'btg_alun',      hour:12, minute:0,  income:15, type:'food', date:'2024-01-15', note:''},
+    {id:33, locId:'btg_alun',      hour:12, minute:45, income:14, type:'food', date:'2024-01-16', note:''},
+    {id:34, locId:'btg_alun',      hour:18, minute:30, income:20, type:'ride', date:'2024-01-16', note:'Sore ramai'},
+    {id:35, locId:'btg_alun',      hour:19, minute:0,  income:22, type:'food', date:'2024-01-17', note:''},
+    {id:36, locId:'btg_pasar',     hour:5,  minute:30, income:18, type:'ride', date:'2024-01-15', note:'Pasar subuh'},
+    {id:37, locId:'btg_pasar',     hour:6,  minute:0,  income:20, type:'ride', date:'2024-01-15', note:'Pasar pagi ramai'},
+    {id:38, locId:'btg_pasar',     hour:6,  minute:45, income:22, type:'ride', date:'2024-01-16', note:''},
+    {id:39, locId:'btg_pasar',     hour:7,  minute:0,  income:19, type:'ride', date:'2024-01-17', note:''},
+    {id:40, locId:'pkl_terminal',  hour:6,  minute:0,  income:20, type:'ride', date:'2024-01-15', note:'Bus pertama'},
+    {id:41, locId:'pkl_terminal',  hour:6,  minute:30, income:18, type:'ride', date:'2024-01-16', note:''},
+    {id:42, locId:'pkl_terminal',  hour:14, minute:0,  income:16, type:'ride', date:'2024-01-15', note:''},
+    {id:43, locId:'pkl_terminal',  hour:21, minute:30, income:25, type:'ride', date:'2024-01-16', note:'Bus malam'},
+    {id:44, locId:'pkl_setono',    hour:7,  minute:0,  income:12, type:'ride', date:'2024-01-15', note:'Grosir pagi'},
+    {id:45, locId:'pkl_setono',    hour:8,  minute:30, income:10, type:'ride', date:'2024-01-16', note:''},
+    {id:46, locId:'pkl_setono',    hour:9,  minute:15, income:11, type:'ride', date:'2024-01-17', note:''},
+    {id:47, locId:'pkl_rsbhay',    hour:7,  minute:30, income:14, type:'ride', date:'2024-01-15', note:'Jam besuk pagi'},
+    {id:48, locId:'pkl_rsbhay',    hour:13, minute:0,  income:16, type:'ride', date:'2024-01-16', note:'Besuk siang'},
+    {id:49, locId:'pkl_rsbhay',    hour:17, minute:0,  income:15, type:'ride', date:'2024-01-17', note:'Besuk sore'},
+    {id:50, locId:'pkl_sriratu',   hour:10, minute:0,  income:18, type:'food', date:'2024-01-15', note:''},
+    {id:51, locId:'pkl_sriratu',   hour:15, minute:30, income:20, type:'food', date:'2024-01-16', note:''},
+    {id:52, locId:'pkl_sriratu',   hour:16, minute:0,  income:22, type:'food', date:'2024-01-17', note:''},
+    {id:53, locId:'btg_rsud',      hour:7,  minute:30, income:12, type:'ride', date:'2024-01-15', note:'Besuk pagi'},
+    {id:54, locId:'btg_rsud',      hour:13, minute:0,  income:11, type:'ride', date:'2024-01-16', note:''},
+    {id:55, locId:'btg_stasiun',   hour:5,  minute:45, income:20, type:'ride', date:'2024-01-15', note:'Kereta pertama'},
+    {id:56, locId:'btg_stasiun',   hour:6,  minute:10, income:18, type:'ride', date:'2024-01-16', note:''},
+    {id:57, locId:'btg_stasiun',   hour:17, minute:20, income:25, type:'ride', date:'2024-01-17', note:'Kereta sore'},
+    {id:58, locId:'pantura_e',     hour:12, minute:0,  income:15, type:'food', date:'2024-01-16', note:'Sopir truk istirahat'},
+    {id:59, locId:'pantura_e',     hour:13, minute:0,  income:14, type:'food', date:'2024-01-17', note:''},
+    {id:60, locId:'pkl_simpang',   hour:8,  minute:0,  income:10, type:'ride', date:'2024-01-15', note:''},
+    {id:61, locId:'pkl_simpang',   hour:12, minute:0,  income:18, type:'food', date:'2024-01-16', note:'Ramai siang'},
+    {id:62, locId:'pkl_simpang',   hour:17, minute:30, income:20, type:'ride', date:'2024-01-17', note:''},
+];
+
+// ============================================================
+// STATE APLIKASI
+// ============================================================
+const S = {
+    locations   : [],
+    history     : [],
+    filterHours : [],      // jam yang difilter (kosong = semua)
+    nextId      : 500,
+    map         : null,
+    mapLayers   : [],      // semua layer bubble di peta
+    // State popup bubble
+    bp : {
+        locId      : null,
+        sortField  : 'date',
+        sortDir    : 'desc',
+        hourFilter : '',   // '' = semua
+    }
+};
+
+// ============================================================
+// LOCAL STORAGE
+// ============================================================
+const LS_LOCS = 'gjr_locs_v3';
+const LS_HIST = 'gjr_hist_v3';
+const LS_NID  = 'gjr_nid_v3';
+
+function saveAll() {
+    localStorage.setItem(LS_LOCS, JSON.stringify(S.locations));
+    localStorage.setItem(LS_HIST, JSON.stringify(S.history));
+    localStorage.setItem(LS_NID,  S.nextId);
+}
+
+function loadAll() {
+    const locs = localStorage.getItem(LS_LOCS);
+    const hist = localStorage.getItem(LS_HIST);
+    const nid  = localStorage.getItem(LS_NID);
+    S.locations = locs ? JSON.parse(locs) : JSON.parse(JSON.stringify(LOCATIONS_DEFAULT));
+    S.history   = hist ? JSON.parse(hist)  : JSON.parse(JSON.stringify(DEMO_HISTORY));
+    S.nextId    = nid  ? parseInt(nid)      : 500;
+    if (!hist) saveAll();
+}
+
+// ============================================================
+// MAP INIT
+// ============================================================
+function initMap() {
+    S.map = L.map('map', { center:[-6.895,109.720], zoom:12, zoomControl:true });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution:'© OpenStreetMap © CARTO', maxZoom:19
+    }).addTo(S.map);
+
+    S.map.on('click', e => {
+        const lat = e.latlng.lat.toFixed(6);
+        const lng = e.latlng.lng.toFixed(6);
+        // Isi form lokasi baru jika terbuka
+        if (document.getElementById('newLocForm').style.display !== 'none') {
+            document.getElementById('fNewLat').value = lat;
+            document.getElementById('fNewLng').value = lng;
+        }
+        // Tampil coord tip
+        const tip = document.getElementById('coordTip');
+        tip.textContent = `📍 ${lat}, ${lng}`;
+        tip.classList.add('show');
+        setTimeout(() => tip.classList.remove('show'), 2500);
+    });
+}
+
+// ============================================================
+// RENDER BUBBLES
+// ============================================================
+function renderBubbles() {
+    // Hapus layer lama
+    S.mapLayers.forEach(l => { try { S.map.removeLayer(l); } catch(_){} });
+    S.mapLayers = [];
+
+    // Hitung per lokasi sesuai filter jam
+    const countMap  = {};
+    const incMap    = {};
+    const entryMap  = {};
+
+    S.history.forEach(h => {
+        if (S.filterHours.length > 0 && !S.filterHours.includes(h.hour)) return;
+        countMap[h.locId] = (countMap[h.locId] || 0) + 1;
+        incMap[h.locId]   = (incMap[h.locId]   || 0) + (h.income || 0);
+        if (!entryMap[h.locId]) entryMap[h.locId] = [];
+        entryMap[h.locId].push(h);
+    });
+
+    let totalMapped = 0;
+
+    S.locations.forEach(loc => {
+        if (!loc.lat || !loc.lng) return;
+        const count  = countMap[loc.id]  || 0;
+        const income = incMap[loc.id]    || 0;
+        totalMapped += count;
+
+        if (count === 0) {
+            // Titik biru kecil
+            const m = L.circleMarker([loc.lat, loc.lng], {
+                radius:5, fillColor:'#2979ff', fillOpacity:0.45,
+                color:'#2979ff', weight:1, opacity:0.6
+            }).addTo(S.map);
+            m.bindTooltip(`<b>${loc.name}</b><br><span style="color:#888">Belum ada data</span>`, {
+                permanent:false, direction:'top'
+            });
+            m.on('click', () => openBp(loc.id));
+            S.mapLayers.push(m);
+            return;
+        }
+
+        // Tentukan warna & label
+        let color, label, statusColor;
+        if      (count > 10) { color='#ff1744'; label='Sangat Ramai'; statusColor='#ff1744'; }
+        else if (count > 5)  { color='#ff6d00'; label='Ramai';        statusColor='#ff6d00'; }
+        else if (count > 2)  { color='#ffd600'; label='Sedang';       statusColor='#ffd600'; }
+        else                 { color='#00e676'; label='Sepi';         statusColor='#00e676'; }
+
+        const radius = Math.min(12 + count * 3.2, 60);
+
+        // Lingkaran luar (halo)
+        const halo = L.circleMarker([loc.lat, loc.lng], {
+            radius: radius + 9, fillColor:'transparent', fillOpacity:0,
+            color, weight:1.5, opacity:0.2, dashArray:'6 4'
+        }).addTo(S.map);
+
+        // Lingkaran utama
+        const circle = L.circleMarker([loc.lat, loc.lng], {
+            radius, fillColor:color, fillOpacity:0.38,
+            color, weight:2.5, opacity:0.9
+        }).addTo(S.map);
+
+        // Titik tengah
+        const dot = L.circleMarker([loc.lat, loc.lng], {
+            radius:3, fillColor:color, fillOpacity:1,
+            color:'#fff', weight:1, opacity:0.8
+        }).addTo(S.map);
+
+        // Label count
+        const lIcon = L.divIcon({
+            html:`<div style="
+                background:${color};
+                color:${count>5?'#fff':'#000'};
+                padding:2px 8px;border-radius:12px;
+                font-size:10px;font-weight:bold;
+                white-space:nowrap;
+                box-shadow:0 2px 8px rgba(0,0,0,0.5);
+                border:1px solid rgba(255,255,255,0.25);
+                pointer-events:none;
+            ">${count}</div>`,
+            className:'', iconAnchor:[-4, radius+13]
+        });
+        const lMarker = L.marker([loc.lat, loc.lng], {icon:lIcon, interactive:false}).addTo(S.map);
+
+        // Tooltip hover
+        const filterStr = S.filterHours.length>0
+            ? `Jam: ${S.filterHours.sort((a,b)=>a-b).map(h=>pad2(h)+':00').join(', ')}`
+            : 'Semua jam';
+        circle.bindTooltip(
+            `<b>${loc.name}</b><br>${label} · ${count} order<br>Rp ${income}rb · ${filterStr}`,
+            {permanent:false, direction:'top', offset:[0,-radius]}
+        );
+
+        // KLIK → buka popup historis
+        const clickHandler = () => openBp(loc.id);
+        circle.on('click', clickHandler);
+        halo.on('click',   clickHandler);
+        dot.on('click',    clickHandler);
+
+        S.mapLayers.push(halo, circle, dot, lMarker);
+    });
+
+    // Update info box
+    document.getElementById('mibFilter').textContent =
+        S.filterHours.length > 0
+        ? `Filter: ${S.filterHours.sort((a,b)=>a-b).map(h=>pad2(h)+':00').join(', ')}`
+        : 'Menampilkan: Semua Jam';
+    document.getElementById('mibCount').textContent = `${totalMapped} order terpetakan`;
+
+    updateStats(countMap, incMap);
+    updateTopList(countMap, incMap);
+}
+
+// ============================================================
+// UPDATE STATISTIK SIDEBAR
+// ============================================================
+function updateStats(countMap, incMap) {
+    const total  = Object.values(countMap).reduce((a,b)=>a+b,0);
+    const income = Object.values(incMap).reduce((a,b)=>a+b,0);
+
+    let hotspot='–', maxC=0;
+    Object.entries(countMap).forEach(([id,c])=>{
+        if(c>maxC){ maxC=c; const l=S.locations.find(x=>x.id===id); hotspot=l?l.name.split(' ').slice(0,2).join(' '):'–'; }
+    });
+
+    const hc={};
+    S.history.forEach(h=>{
+        if(S.filterHours.length>0 && !S.filterHours.includes(h.hour)) return;
+        hc[h.hour]=(hc[h.hour]||0)+1;
+    });
+    let peakH='–', maxH=0;
+    Object.entries(hc).forEach(([hr,c])=>{ if(c>maxH){maxH=c; peakH=pad2(+hr)+':00';} });
+
+    document.getElementById('sTotal').textContent   = total;
+    document.getElementById('sIncome').textContent  = income.toLocaleString();
+    document.getElementById('sHotspot').textContent = hotspot;
+    document.getElementById('sPeak').textContent    = peakH;
+}
+
+// ============================================================
+// TOP LIST
+// ============================================================
+function updateTopList(countMap, incMap) {
+    const sorted = Object.entries(countMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const ul = document.getElementById('topList');
+    ul.innerHTML = '';
+    const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+    sorted.forEach(([lid,cnt],i)=>{
+        const loc = S.locations.find(l=>l.id===lid);
+        if(!loc) return;
+        const li = document.createElement('li');
+        li.className='top-item';
+        li.innerHTML=`
+            <span class="top-rank">${medals[i]||'#'+(i+1)}</span>
+            <span class="top-name">
+                ${loc.name}
+                <div class="top-sub">💰 Rp${(incMap[lid]||0).toLocaleString()}rb · ${loc.area}</div>
+            </span>
+            <span class="count-badge">${cnt}</span>`;
+        li.onclick = ()=> openBp(lid);
+        ul.appendChild(li);
+    });
+    if(!sorted.length) ul.innerHTML='<li class="top-item" style="color:#444;justify-content:center">Tidak ada data</li>';
+}
+
+// ============================================================
+// FILTER JAM
+// ============================================================
+function buildHourGrid() {
+    const grid = document.getElementById('hourGrid');
+    grid.innerHTML='';
+    // Hitung jam yang ada data
+    const hoursWithData = new Set(S.history.map(h=>h.hour));
+    for(let h=0;h<24;h++){
+        const btn = document.createElement('button');
+        btn.className='hour-btn'+(hoursWithData.has(h)?' has-data':'');
+        btn.id=`hb${h}`;
+        btn.textContent=pad2(h);
+        btn.title=`${pad2(h)}:00${hoursWithData.has(h)?' (ada data)':''}`;
+        btn.onclick=()=>toggleHour(h);
+        grid.appendChild(btn);
+    }
+}
+
+function refreshHourGridDots() {
+    const hoursWithData = new Set(S.history.map(h=>h.hour));
+    for(let h=0;h<24;h++){
+        const btn=document.getElementById(`hb${h}`);
+        if(!btn) continue;
+        btn.className='hour-btn'
+            +(hoursWithData.has(h)?' has-data':'')
+            +(S.filterHours.includes(h)?' active':'');
+    }
+}
+
+function toggleHour(h) {
+    const idx=S.filterHours.indexOf(h);
+    idx>=0 ? S.filterHours.splice(idx,1) : S.filterHours.push(h);
+    refreshHourGridDots();
+    updateFilterLabel();
+}
+
+function updateFilterLabel() {
+    const lbl = S.filterHours.length===0
+        ? 'Semua Jam'
+        : S.filterHours.sort((a,b)=>a-b).map(h=>pad2(h)+':00').join(', ');
+    document.getElementById('activeFilterLabel').textContent=lbl;
+}
+
+function applyFilter() {
+    renderBubbles();
+    showToast(`✅ Filter diterapkan${S.filterHours.length?': Jam '+S.filterHours.sort((a,b)=>a-b).map(h=>pad2(h)).join(', '):''}`, 'success');
+}
+
+function applySlider() {
+    const h=parseInt(document.getElementById('hourSlider').value);
+    if(!S.filterHours.includes(h)) S.filterHours.push(h);
+    refreshHourGridDots();
+    updateFilterLabel();
+    showToast(`➕ Jam ${pad2(h)}:00 ditambahkan ke filter`, 'info');
+}
+
+function clearFilter() {
+    S.filterHours=[];
+    document.getElementById('hourSlider').value=6;
+    document.getElementById('sliderVal').textContent='06:00';
+    refreshHourGridDots();
+    updateFilterLabel();
+    renderBubbles();
+    showToast('🔄 Filter direset — tampil semua jam', 'info');
+}
+
+function onSliderChange(v) {
+    document.getElementById('sliderVal').textContent=pad2(parseInt(v))+':00';
+}
+
+function selectPeak() {
+    const hc={};
+    S.history.forEach(h=>{ hc[h.hour]=(hc[h.hour]||0)+1; });
+    const vals=Object.values(hc);
+    if(!vals.length){ showToast('⚠️ Belum ada data historis','warning'); return; }
+    const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+    S.filterHours=Object.entries(hc).filter(([,c])=>c>=avg).map(([hr])=>+hr);
+    refreshHourGridDots();
+    updateFilterLabel();
+    renderBubbles();
+    showToast(`🔥 ${S.filterHours.length} jam puncak dipilih & diterapkan`,'warning');
+}
+
+function selectAll() {
+    S.filterHours=[];
+    refreshHourGridDots();
+    updateFilterLabel();
+    renderBubbles();
+}
+
+function selectNow() {
+    const now=new Date().getHours();
+    if(!S.filterHours.includes(now)) S.filterHours.push(now);
+    refreshHourGridDots();
+    updateFilterLabel();
+    renderBubbles();
+    showToast(`📍 Jam sekarang ${pad2(now)}:00 ditambahkan`,'info');
+}
+
+// ============================================================
+// BUBBLE POPUP — BUKA
+// ============================================================
+function openBp(locId) {
+    const loc=S.locations.find(l=>l.id===locId);
+    if(!loc) return;
+
+    S.bp.locId     = locId;
+    S.bp.sortField = 'date';
+    S.bp.sortDir   = 'desc';
+    S.bp.hourFilter= '';
+
+    // Isi header
+    document.getElementById('bpName').textContent  = '📍 '+loc.name;
+    document.getElementById('bpArea').textContent  = loc.area;
+    document.getElementById('bpCoord').textContent = `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`;
+
+    // Semua data lokasi ini (tanpa filter jam peta)
+    const allData = S.history.filter(h=>h.locId===locId);
+
+    // Statistik ringkasan
+    const tot = allData.length;
+    const inc = allData.reduce((a,b)=>a+(b.income||0),0);
+    const avg = tot>0?Math.round(inc/tot):0;
+
+    const hc={};
+    allData.forEach(h=>{ hc[h.hour]=(hc[h.hour]||0)+1; });
+    let peakH='–', maxHC=0;
+    Object.entries(hc).forEach(([hr,c])=>{ if(c>maxHC){maxHC=c; peakH=pad2(+hr)+':00';} });
+
+    document.getElementById('bpTotal').textContent  = tot;
+    document.getElementById('bpIncome').textContent = inc.toLocaleString();
+    document.getElementById('bpAvg').textContent    = avg.toLocaleString();
+    document.getElementById('bpPeak').textContent   = peakH;
+
+    // Status pill
+    const pill=document.getElementById('bpStatusPill');
+    if      (tot>10){ pill.style.background='#ff174433'; pill.style.color='#ff1744'; pill.textContent='● Sangat Ramai'; }
+    else if (tot>5) { pill.style.background='#ff6d0033'; pill.style.color='#ff6d00'; pill.textContent='● Ramai'; }
+    else if (tot>2) { pill.style.background='#ffd60033'; pill.style.color='#ffd600'; pill.textContent='● Sedang'; }
+    else if (tot>0) { pill.style.background='#00e67633'; pill.style.color='#00e676'; pill.textContent='● Sepi'; }
+    else            { pill.style.background='#2979ff33'; pill.style.color='#2979ff'; pill.textContent='● Belum Ada Data'; }
+
+    // Chart jam
+    renderBpChart(allData);
+
+    // Bangun filter jam dropdown
+    buildBpHourSelect(allData);
+
+    // Reset filter UI
+    document.getElementById('bpFType').value  = '';
+    document.getElementById('bpFHour').value  = '';
+    document.getElementById('bpSearch').value = '';
+    S.bp.hourFilter = '';
+
+    // Render tabel
+    renderBpRows();
+
+    // Tampilkan overlay
+    document.getElementById('bpOverlay').classList.add('show');
+}
+
+function closeBp() {
+    document.getElementById('bpOverlay').classList.remove('show');
+    S.bp.locId=null;
+}
+
+// ============================================================
+// CHART JAM DI POPUP
+// ============================================================
+function renderBpChart(data) {
+    const bars=document.getElementById('bpBars');
+    bars.innerHTML='';
+
+    const hc={}, hi={};
+    for(let h=0;h<24;h++){hc[h]=0;hi[h]=0;}
+    data.forEach(d=>{ hc[d.hour]=(hc[d.hour]||0)+1; hi[d.hour]=(hi[d.hour]||0)+(d.income||0); });
+
+    const maxC=Math.max(...Object.values(hc),1);
+
+    for(let h=0;h<24;h++){
+        const cnt=hc[h]; const inc=hi[h];
+        const pct=Math.round((cnt/maxC)*100);
+        let barColor='#1e1e35';
+        if(cnt>0){
+            if(pct>=80)      barColor='#ff1744';
+            else if(pct>=50) barColor='#ff6d00';
+            else if(pct>=20) barColor='#ffd600';
+            else             barColor='#00e676';
+        }
+
+        const wrap=document.createElement('div');
+        wrap.className='hb-wrap';
+        wrap.id=`bbar${h}`;
+        wrap.innerHTML=`
+            <div class="hb-tip">${pad2(h)}:xx · ${cnt} order · Rp${inc}rb</div>
+            <div style="flex:1;display:flex;align-items:flex-end;width:100%">
+                <div class="hb-bar" style="height:${Math.max(pct,2)}%;background:${barColor};width:100%;
+                    ${S.bp.hourFilter===h.toString()?'outline:1px solid #00d4ff;':''}
+                "></div>
+            </div>
+            <div class="hb-lbl">${h}</div>`;
+        wrap.onclick=()=>{ if(cnt>0) clickBpBar(h); };
+        if(cnt===0) wrap.style.cursor='default';
+        bars.appendChild(wrap);
+    }
+    updateBpBarHighlight();
+}
+
+function clickBpBar(h) {
+    S.bp.hourFilter = S.bp.hourFilter===h.toString() ? '' : h.toString();
+    document.getElementById('bpFHour').value = S.bp.hourFilter;
+    updateBpBarHighlight();
+    renderBpRows();
+}
+
+function updateBpBarHighlight() {
+    for(let h=0;h<24;h++){
+        const w=document.getElementById(`bbar${h}`);
+        if(!w) continue;
+        if(S.bp.hourFilter===''){
+            w.classList.remove('selected','dimmed');
+        } else {
+            if(S.bp.hourFilter===h.toString()){ w.classList.add('selected'); w.classList.remove('dimmed'); }
+            else { w.classList.add('dimmed'); w.classList.remove('selected'); }
+        }
+    }
+}
+
+function buildBpHourSelect(data) {
+    const hours=[...new Set(data.map(d=>d.hour))].sort((a,b)=>a-b);
+    const sel=document.getElementById('bpFHour');
+    sel.innerHTML='<option value="">Semua Jam</option>';
+    hours.forEach(h=>{
+        const c=data.filter(d=>d.hour===h).length;
+        sel.innerHTML+=`<option value="${h}">${pad2(h)}:00 (${c} order)</option>`;
+    });
+}
+
+function onBpHourSelect() {
+    S.bp.hourFilter=document.getElementById('bpFHour').value;
+    updateBpBarHighlight();
+    renderBpRows();
+}
+
+function resetBpHourFilter() {
+    S.bp.hourFilter='';
+    document.getElementById('bpFHour').value='';
+    updateBpBarHighlight();
+    renderBpRows();
+}
+
+// ============================================================
+// RENDER TABEL POPUP
+// ============================================================
+const TYPE_ICON = {ride:'🛵',food:'🍱',send:'📦',shop:'🛍️'};
+const TYPE_NAME = {ride:'GoRide',food:'GoFood',send:'GoSend',shop:'GoShop'};
+
+function renderBpRows() {
+    if(!S.bp.locId) return;
+
+    let data = S.history.filter(h=>h.locId===S.bp.locId);
+
+    // Filter tipe
+    const fType=document.getElementById('bpFType').value;
+    if(fType) data=data.filter(d=>d.type===fType);
+
+    // Filter jam
+    if(S.bp.hourFilter!=='') data=data.filter(d=>d.hour===parseInt(S.bp.hourFilter));
+
+    // Search
+    const q=document.getElementById('bpSearch').value.toLowerCase().trim();
+    if(q) data=data.filter(d=>(d.note||'').toLowerCase().includes(q)||d.date.includes(q));
+
+    // Sort
+    data.sort((a,b)=>{
+        let va,vb;
+        const sf=S.bp.sortField;
+        if(sf==='date'){
+            va=`${a.date}${pad2(a.hour)}${pad2(a.minute||0)}`;
+            vb=`${b.date}${pad2(b.hour)}${pad2(b.minute||0)}`;
+        } else if(sf==='time'){
+            va=a.hour*60+(a.minute||0); vb=b.hour*60+(b.minute||0);
+        } else if(sf==='income'){
+            va=a.income||0; vb=b.income||0;
+        } else if(sf==='type'){
+            va=a.type||''; vb=b.type||'';
+        }
+        if(va<vb) return S.bp.sortDir==='asc'?-1:1;
+        if(va>vb) return S.bp.sortDir==='asc'?1:-1;
+        return 0;
+    });
+
+    // Update sort arrows
+    ['date','time','type','income'].forEach(f=>{
+        const el=document.getElementById('sa_'+f);
+        if(el) el.textContent=f===S.bp.sortField?(S.bp.sortDir==='asc'?'↑':'↓'):'↕';
+    });
+
+    const totalInc=data.reduce((a,b)=>a+(b.income||0),0);
+    document.getElementById('bpRowInfo').textContent=`${data.length} data ditemukan`;
+    document.getElementById('bpTotalInc').textContent=`Omset: Rp ${totalInc.toLocaleString()}rb`;
+
+    const tbody=document.getElementById('bpTbody');
+    const nodata=document.getElementById('bpNoData');
+
+    if(!data.length){
+        tbody.innerHTML='';
+        nodata.style.display='block';
+        return;
+    }
+    nodata.style.display='none';
+
+    tbody.innerHTML=data.map(d=>{
+        const hh=pad2(d.hour);
+        const mm=pad2(d.minute||0);
+        const tCls=d.type||'ride';
+        return `<tr>
+            <td><div class="date-cell">${d.date}</div></td>
+            <td><span class="time-cell">${hh}:${mm}</span></td>
+            <td><span class="tbadge ${tCls}">${TYPE_ICON[tCls]||'📋'} ${TYPE_NAME[tCls]||tCls}</span></td>
+            <td class="inc-cell">Rp ${(d.income||0).toLocaleString()}rb</td>
+            <td class="note-cell" title="${d.note||''}">${d.note ? d.note.substring(0,35)+(d.note.length>35?'…':'') : '<span style="color:#333">—</span>'}</td>
+            <td><button class="row-del" onclick="bpDelEntry(${d.id})">🗑️</button></td>
+        </tr>`;
+    }).join('');
+}
+
+function bpSort(field) {
+    if(S.bp.sortField===field){
+        S.bp.sortDir=S.bp.sortDir==='asc'?'desc':'asc';
+    } else {
+        S.bp.sortField=field;
+        S.bp.sortDir='desc';
+    }
+    renderBpRows();
+}
+
+function bpDelEntry(id) {
+    if(!confirm('Hapus data ini?')) return;
+    S.history=S.history.filter(h=>h.id!==id);
+    saveAll();
+    renderBubbles();
+    renderHistoryList();
+    refreshHourGridDots();
+
+    // Refresh popup
+    const allData=S.history.filter(h=>h.locId===S.bp.locId);
+    const tot=allData.length;
+    const inc=allData.reduce((a,b)=>a+(b.income||0),0);
+    document.getElementById('bpTotal').textContent  = tot;
+    document.getElementById('bpIncome').textContent = inc.toLocaleString();
+    document.getElementById('bpAvg').textContent    = tot>0?Math.round(inc/tot):0;
+    renderBpChart(allData);
+    buildBpHourSelect(allData);
+    renderBpRows();
+    showToast('🗑️ Data dihapus','info');
+}
+
+// ============================================================
+// DROPDOWN LOKASI
+// ============================================================
+function buildLocDropdown() {
+    const sel=document.getElementById('fLoc');
+    sel.innerHTML='<option value="">— Pilih Lokasi —</option>';
+    const areas={};
+    S.locations.forEach(l=>{ if(!areas[l.area]) areas[l.area]=[]; areas[l.area].push(l); });
+    Object.entries(areas).forEach(([area,locs])=>{
+        const og=document.createElement('optgroup');
+        og.label='📍 '+area;
+        locs.forEach(l=>{
+            const o=document.createElement('option');
+            o.value=l.id; o.textContent=l.name; og.appendChild(o);
+        });
+        sel.appendChild(og);
+    });
+    const opt=document.createElement('option');
+    opt.value='NEW'; opt.textContent='➕ Tambah Lokasi Baru...';
+    sel.appendChild(opt);
+}
+
+function onLocChange() {
+    const v=document.getElementById('fLoc').value;
+    document.getElementById('newLocForm').style.display=v==='NEW'?'block':'none';
+}
+
+// ============================================================
+// TAMBAH HISTORIS
+// ============================================================
+function addHistory() {
+    const locId  = document.getElementById('fLoc').value;
+    const hour   = parseInt(document.getElementById('fHour').value);
+    const minute = parseInt(document.getElementById('fMinute').value)||0;
+    const income = parseFloat(document.getElementById('fIncome').value);
+    const type   = document.getElementById('fType').value;
+    const date   = document.getElementById('fDate').value;
+    const note   = document.getElementById('fNote').value.trim();
+
+    if(!locId)                             return showToast('⚠️ Pilih lokasi dahulu','error');
+    if(isNaN(hour)||hour<0||hour>23)       return showToast('⚠️ Jam tidak valid (0–23)','error');
+    if(isNaN(minute)||minute<0||minute>59) return showToast('⚠️ Menit tidak valid (0–59)','error');
+    if(isNaN(income)||income<0)            return showToast('⚠️ Omset tidak valid','error');
+    if(!date)                              return showToast('⚠️ Tanggal harus diisi','error');
+
+    let finalLocId=locId;
+
+    if(locId==='NEW'){
+        const nm   = document.getElementById('fNewName').value.trim();
+        const lat  = parseFloat(document.getElementById('fNewLat').value);
+        const lng  = parseFloat(document.getElementById('fNewLng').value);
+        const area = document.getElementById('fNewArea').value.trim()||'Lokasi Custom';
+        if(!nm)              return showToast('⚠️ Nama lokasi baru harus diisi','error');
+        if(isNaN(lat)||isNaN(lng)) return showToast('⚠️ Koordinat tidak valid\nKlik peta untuk dapat koordinat','error');
+
+        finalLocId='custom_'+Date.now();
+        S.locations.push({id:finalLocId, name:nm, lat, lng, area});
+        buildLocDropdown();
+        // Reset form baru
+        ['fNewName','fNewLat','fNewLng','fNewArea'].forEach(id=>{ document.getElementById(id).value=''; });
+        document.getElementById('newLocForm').style.display='none';
+        showToast(`📍 Lokasi "${nm}" ditambahkan`,'success');
+    }
+
+    S.history.push({
+        id:S.nextId++, locId:finalLocId,
+        hour, minute, income, type, date, note
+    });
+    saveAll();
+    renderBubbles();
+    renderHistoryList();
+    refreshHourGridDots();
+
+    // Reset sebagian form
+    ['fHour','fMinute','fIncome','fNote'].forEach(id=>{ document.getElementById(id).value=''; });
+    showToast(`✅ Disimpan: ${pad2(hour)}:${pad2(minute)} — Rp${income}rb`,'success');
+}
+
+// ============================================================
+// RIWAYAT SIDEBAR
+// ============================================================
+function renderHistoryList() {
+    const list=document.getElementById('historyList');
+    const recent=[...S.history].reverse().slice(0,20);
+    list.innerHTML='';
+    if(!recent.length){
+        list.innerHTML='<div style="color:#444;text-align:center;padding:12px;font-size:0.78em">📭 Belum ada data</div>';
+        return;
+    }
+    recent.forEach(h=>{
+        const loc=S.locations.find(l=>l.id===h.locId);
+        const nm=loc?loc.name:'Lokasi?';
+        const hh=pad2(h.hour), mm=pad2(h.minute||0);
+        const icon=TYPE_ICON[h.type]||'📋';
+        const div=document.createElement('div');
+        div.className=`h-item ${h.type||''}`;
+        div.innerHTML=`
+            <div class="h-info">
+                <div class="h-loc">${icon} ${nm}</div>
+                <div class="h-meta">📅 ${h.date} · 🕐 ${hh}:${mm} · ${TYPE_NAME[h.type]||h.type}</div>
+            </div>
+            <div class="h-inc">Rp${h.income}rb</div>
+            <button class="h-del" onclick="event.stopPropagation();delEntry(${h.id})">🗑</button>`;
+        div.onclick=()=>{ if(loc) openBp(loc.id); };
+        div.title='Klik untuk lihat detail lokasi';
+        list.appendChild(div);
+    });
+}
+
+function delEntry(id) {
+    S.history=S.history.filter(h=>h.id!==id);
+    saveAll();
+    renderBubbles();
+    renderHistoryList();
+    refreshHourGridDots();
+    if(S.bp.locId) {
+        const allData=S.history.filter(h=>h.locId===S.bp.locId);
+        renderBpChart(allData);
+        buildBpHourSelect(allData);
+        renderBpRows();
+    }
+    showToast('🗑️ Data dihapus','info');
+}
+
+// ============================================================
+// MODAL HAPUS MASSAL
+// ============================================================
+let _delTarget=null;
+function showConfirm(mode) {
+    _delTarget=mode;
+    document.getElementById('mIcon').textContent  = mode==='cache'?'🗑️':'💥';
+    document.getElementById('mTitle').textContent = mode==='cache'?'Hapus Data Cache':'Hapus SEMUA Data';
+    document.getElementById('mText').innerHTML    = mode==='cache'
+        ? 'Hapus <b>data demo/bawaan</b> saja (id &lt; 500).<br>Data yang Anda input manual tetap aman.'
+        : '⚠️ Hapus <b>SELURUH</b> data historis dan lokasi custom?<br>Tindakan ini <b>tidak bisa dibatalkan</b>!';
+    document.getElementById('confirmBg').classList.add('show');
+}
+function closeConfirm() {
+    document.getElementById('confirmBg').classList.remove('show');
+    _delTarget=null;
+}
+function doDelete() {
+    if(_delTarget==='cache'){
+        S.history=S.history.filter(h=>h.id>=500);
+        saveAll();
+        showToast('🧹 Data cache/demo dihapus','success');
+    } else if(_delTarget==='all'){
+        S.history=[]; S.locations=JSON.parse(JSON.stringify(LOCATIONS_DEFAULT)); S.nextId=500;
+        localStorage.clear();
+        buildLocDropdown();
+        if(S.bp.locId) closeBp();
+        showToast('💥 Semua data telah dihapus','error');
+    }
+    closeConfirm();
+    renderBubbles();
+    renderHistoryList();
+    buildHourGrid();
+}
+
+// ============================================================
+// EXPORT
+// ============================================================
+function exportData() {
+    const payload={
+        app:'GoJek Radar PKL-BTG',
+        exportDate:new Date().toISOString(),
+        totalHistory:S.history.length,
+        totalLocations:S.locations.length,
+        locations:S.locations,
+        history:S.history
+    };
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url;
+    a.download=`gojek_radar_${new Date().toISOString().split('T')[0]}.json`;
+    a.click(); URL.revokeObjectURL(url);
+    showToast(`📤 Export ${S.history.length} data berhasil`,'success');
+}
+
+// ============================================================
+// CLOCK
+// ============================================================
+function startClock() {
+    const el=document.getElementById('clockDisplay');
+    setInterval(()=>{
+        const n=new Date();
+        el.textContent=`${pad2(n.getHours())}:${pad2(n.getMinutes())}:${pad2(n.getSeconds())}`;
+    },1000);
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+let _toastTimer=null;
+function showToast(msg, type='info') {
+    const t=document.getElementById('toast');
+    t.textContent=msg; t.className=`toast ${type} show`;
+    clearTimeout(_toastTimer);
+    _toastTimer=setTimeout(()=>t.classList.remove('show'),3200);
+}
+
+// ============================================================
+// HELPER
+// ============================================================
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('load', ()=>{
+    loadAll();
+    initMap();
+    buildHourGrid();
+    buildLocDropdown();
+    renderBubbles();
+    renderHistoryList();
+    startClock();
+
+    // Set tanggal & menit default
+    document.getElementById('fDate').value   = new Date().toISOString().split('T')[0];
+    document.getElementById('fMinute').value = '0';
+
+    // Fit bounds
+    setTimeout(()=>{
+        S.map.fitBounds([[-7.18,109.52],[-6.76,109.98]]);
+    },400);
+
+    // Tutup popup bila klik overlay
+    document.getElementById('bpOverlay').addEventListener('click', e=>{
+        if(e.target===document.getElementById('bpOverlay')) closeBp();
+    });
+    document.getElementById('confirmBg').addEventListener('click', e=>{
+        if(e.target===document.getElementById('confirmBg')) closeConfirm();
+    });
+
+    showToast('🛵 GoJek Radar siap! Klik bubble untuk lihat historis lengkap.','success');
+});
+</script>
+</body>
+</html>
