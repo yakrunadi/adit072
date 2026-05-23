@@ -441,7 +441,7 @@
 <!-- ===== HEADER ===== -->
 <div class="header">
     <div>
-        <h1>🛵 GoJek Radar
+        <h1>🛵 Shopee
             <span style="color:#ff6b35;font-size:0.85em">Pekalongan & Batang</span>
         </h1>
         <div class="subtitle">Smart Heatmap · Klik bubble untuk historis lengkap</div>
@@ -1614,7 +1614,7 @@ function doDelete() {
 // ============================================================
 function exportData() {
     const payload={
-        app:'GoJek Radar PKL-BTG',
+        app:'Shopee Radar PKL-BTG',
         exportDate:new Date().toISOString(),
         totalHistory:S.history.length,
         totalLocations:S.locations.length,
@@ -1624,7 +1624,7 @@ function exportData() {
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url;
-    a.download=`gojek_radar_${new Date().toISOString().split('T')[0]}.json`;
+    a.download=`Shopee_radar_${new Date().toISOString().split('T')[0]}.json`;
     a.click(); URL.revokeObjectURL(url);
     showToast(`📤 Export ${S.history.length} data berhasil`,'success');
 }
@@ -1685,7 +1685,7 @@ window.addEventListener('load', ()=>{
         if(e.target===document.getElementById('confirmBg')) closeConfirm();
     });
 
-    showToast('🛵 GoJek Radar siap! Klik bubble untuk lihat historis lengkap.','success');
+    showToast('🛵 Shopee Radar siap! Klik bubble untuk lihat historis lengkap.','success');
 });
 </script>
 </body>
